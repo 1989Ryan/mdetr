@@ -24,10 +24,10 @@ def parse_args():
     parser = argparse.ArgumentParser("Submitit detection", parents=[detection_parser])
 
     parser.add_argument("--partition", default=None, type=str, help="Partition where to submit")
-    parser.add_argument("--ngpus", default=8, type=int, help="Number of gpus to request on each node")
-    parser.add_argument("--nodes", default=4, type=int, help="Number of nodes to request")
+    parser.add_argument("--ngpus", default=1, type=int, help="Number of gpus to request on each node")
+    parser.add_argument("--nodes", default=1, type=int, help="Number of nodes to request")
     parser.add_argument("--timeout", default=4300, type=int, help="Duration of the job")
-    parser.add_argument("--job_dir", default="", type=str, help="Job dir. Leave empty for automatic.")
+    parser.add_argument("--job_dir", default="/home/zirui/research_paragon/baseline/mdetr/work", type=str, help="Job dir. Leave empty for automatic.")
     parser.add_argument("--mail", default="", type=str, help="Email this user when the job finishes if specified")
     return parser.parse_args()
 
@@ -158,7 +158,7 @@ def main():
     if args.mail:
         executor.update_parameters(additional_parameters={"mail-user": args.mail, "mail-type": "END"})
 
-    args.dist_url = get_init_file(args).as_uri()
+    # args.dist_url = get_init_file(args).as_uri()
     args.output_dir = args.job_dir
 
     trainer = Trainer(args)

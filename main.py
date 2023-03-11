@@ -18,15 +18,17 @@ from torch.utils.data import ConcatDataset, DataLoader, DistributedSampler
 
 import util.dist as dist
 import util.misc as utils
-from datasets import build_dataset, get_coco_api_from_dataset
-from datasets.clevrref import ClevrRefEvaluator
-from datasets.coco_eval import CocoEvaluator
-from datasets.flickr_eval import FlickrEvaluator
-from datasets.phrasecut_eval import PhrasecutEvaluator
+# import object_detector.maskrcnn.detector_utils as myutils
+# from baseline.mdetr.datasets import build_dataset, get_coco_api_from_dataset
+# from datasets.clevrref import ClevrRefEvaluator
+# from datasets.coco_eval import CocoEvaluator
+# from datasets.flickr_eval import FlickrEvaluator
+# from datasets.phrasecut_eval import PhrasecutEvaluator
 from datasets.refexp import RefExpEvaluator
 from engine import evaluate, train_one_epoch
 from models import build_model
 from models.postprocessors import build_postprocessors
+from object_detector.maskrcnn.bbox_dataset import build
 
 
 def get_args_parser():
@@ -34,7 +36,7 @@ def get_args_parser():
     parser.add_argument("--run_name", default="", type=str)
 
     # Dataset specific
-    parser.add_argument("--dataset_config", default=None, required=True)
+    # parser.add_argument("--dataset_config", default=None, required=True)
     parser.add_argument("--do_qa", action="store_true", help="Whether to do question answering")
     parser.add_argument(
         "--predict_final",
@@ -281,12 +283,12 @@ def main(args):
     dist.init_distributed_mode(args)
 
     # Update dataset specific configs
-    if args.dataset_config is not None:
-        # https://stackoverflow.com/a/16878364
-        d = vars(args)
-        with open(args.dataset_config, "r") as f:
-            cfg = json.load(f)
-        d.update(cfg)
+    # if args.dataset_config is not None:
+    #     # https://stackoverflow.com/a/16878364
+    #     d = vars(args)
+    #     with open(args.dataset_config, "r") as f:
+    #         cfg = json.load(f)
+    #     d.update(cfg)
 
     print("git:\n  {}\n".format(utils.get_sha()))
 
@@ -306,7 +308,7 @@ def main(args):
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
-    torch.set_deterministic(True)
+    # torch.set_deterministic(True)
 
     # Build the model
     model, criterion, contrastive_criterion, qa_criterion, weight_dict = build_model(args)
@@ -356,73 +358,80 @@ def main(args):
 
     dataset_train, sampler_train, data_loader_train = None, None, None
     if not args.eval:
-        dataset_train = ConcatDataset(
-            [build_dataset(name, image_set="train", args=args) for name in args.combine_datasets]
-        )
-
+        # dataset_train = ConcatDataset(
+        #     [build_dataset(name, image_set="train", args=args) for name in args.combine_datasets]
+        # )
+        tabletop_dataset = build(test=False,root='/home/zirui/tabletop_gym', args=args)
+        data_loader_train = DataLoader(
+            tabletop_dataset, batch_size=4, shuffle=True, num_workers=4,
+            collate_fn=partial(utils.collate_fn, False))
         # To handle very big datasets, we chunk it into smaller parts.
-        if args.epoch_chunks > 0:
-            print(
-                "Splitting the training set into {args.epoch_chunks} of size approximately "
-                f" {len(dataset_train) // args.epoch_chunks}"
-            )
-            chunks = torch.chunk(torch.arange(len(dataset_train)), args.epoch_chunks)
-            datasets = [torch.utils.data.Subset(dataset_train, chunk.tolist()) for chunk in chunks]
-            if args.distributed:
-                samplers_train = [DistributedSampler(ds) for ds in datasets]
-            else:
-                samplers_train = [torch.utils.data.RandomSampler(ds) for ds in datasets]
+        # if args.epoch_chunks > 0:
+        #     print(
+        #         "Splitting the training set into {args.epoch_chunks} of size approximately "
+        #         f" {len(dataset_train) // args.epoch_chunks}"
+        #     )
+        #     chunks = torch.chunk(torch.arange(len(dataset_train)), args.epoch_chunks)
+        #     datasets = [torch.utils.data.Subset(dataset_train, chunk.tolist()) for chunk in chunks]
+        #     if args.distributed:
+        #         samplers_train = [DistributedSampler(ds) for ds in datasets]
+        #     else:
+        #         samplers_train = [torch.utils.data.RandomSampler(ds) for ds in datasets]
 
-            batch_samplers_train = [
-                torch.utils.data.BatchSampler(sampler_train, args.batch_size, drop_last=True)
-                for sampler_train in samplers_train
-            ]
-            assert len(batch_samplers_train) == len(datasets)
-            data_loaders_train = [
-                DataLoader(
-                    ds,
-                    batch_sampler=batch_sampler_train,
-                    collate_fn=partial(utils.collate_fn, False),
-                    num_workers=args.num_workers,
-                )
-                for ds, batch_sampler_train in zip(datasets, batch_samplers_train)
-            ]
-        else:
-            if args.distributed:
-                sampler_train = DistributedSampler(dataset_train)
-            else:
-                sampler_train = torch.utils.data.RandomSampler(dataset_train)
+        #     batch_samplers_train = [
+        #         torch.utils.data.BatchSampler(sampler_train, args.batch_size, drop_last=True)
+        #         for sampler_train in samplers_train
+        #     ]
+        #     assert len(batch_samplers_train) == len(datasets)
+        #     data_loaders_train = [
+        #         DataLoader(
+        #             ds,
+        #             batch_sampler=batch_sampler_train,
+        #             collate_fn=partial(utils.collate_fn, False),
+        #             num_workers=args.num_workers,
+        #         )
+        #         for ds, batch_sampler_train in zip(datasets, batch_samplers_train)
+        #     ]
+        # else:
+        #     if args.distributed:
+        #         sampler_train = DistributedSampler(dataset_train)
+        #     else:
+        #         sampler_train = torch.utils.data.RandomSampler(dataset_train)
 
-            batch_sampler_train = torch.utils.data.BatchSampler(sampler_train, args.batch_size, drop_last=True)
-            data_loader_train = DataLoader(
-                dataset_train,
-                batch_sampler=batch_sampler_train,
-                collate_fn=partial(utils.collate_fn, False),
-                num_workers=args.num_workers,
-            )
+        #     batch_sampler_train = torch.utils.data.BatchSampler(sampler_train, args.batch_size, drop_last=True)
+        #     data_loader_train = DataLoader(
+        #         dataset_train,
+        #         batch_sampler=batch_sampler_train,
+        #         collate_fn=partial(utils.collate_fn, False),
+        #         num_workers=args.num_workers,
+        #     )
 
     # Val dataset
-    if len(args.combine_datasets_val) == 0:
-        raise RuntimeError("Please provide at leas one validation dataset")
+    # if len(args.combine_datasets_val) == 0:
+    #     raise RuntimeError("Please provide at leas one validation dataset")
 
-    Val_all = namedtuple(typename="val_data", field_names=["dataset_name", "dataloader", "base_ds", "evaluator_list"])
+    # Val_all = namedtuple(typename="val_data", field_names=["dataset_name", "dataloader", "base_ds", "evaluator_list"])
 
-    val_tuples = []
-    for dset_name in args.combine_datasets_val:
-        dset = build_dataset(dset_name, image_set="val", args=args)
-        sampler = (
-            DistributedSampler(dset, shuffle=False) if args.distributed else torch.utils.data.SequentialSampler(dset)
-        )
-        dataloader = DataLoader(
-            dset,
-            args.batch_size,
-            sampler=sampler,
-            drop_last=False,
-            collate_fn=partial(utils.collate_fn, False),
-            num_workers=args.num_workers,
-        )
-        base_ds = get_coco_api_from_dataset(dset)
-        val_tuples.append(Val_all(dataset_name=dset_name, dataloader=dataloader, base_ds=base_ds, evaluator_list=None))
+    # val_tuples = []
+    # val_tabletop_dataset = build(test=True,root='/home/zirui/tabletop_gym/dataset', args=args)
+    # val_dataloader = torch.utils.data.DataLoader(
+    #         val_tabletop_dataset, batch_size=16, shuffle=True, num_workers=4,
+    #         collate_fn=utils.collate_fn)
+    # for dset_name in args.combine_datasets_val:
+    #     dset = build_dataset(dset_name, image_set="val", args=args)
+    #     sampler = (
+    #         DistributedSampler(dset, shuffle=False) if args.distributed else torch.utils.data.SequentialSampler(dset)
+    #     )
+    #     dataloader = DataLoader(
+    #         dset,
+    #         args.batch_size,
+    #         sampler=sampler,
+    #         drop_last=False,
+    #         collate_fn=partial(utils.collate_fn, False),
+    #         num_workers=args.num_workers,
+    #     )
+    #     base_ds = get_coco_api_from_dataset(dset)
+    #     val_tuples.append(Val_all(dataset_name=dset_name, dataloader=dataloader, base_ds=base_ds, evaluator_list=None))
 
     if args.frozen_weights is not None:
         if args.resume.startswith("https"):
@@ -501,46 +510,46 @@ def main(args):
         return evaluator_list
 
     # Runs only evaluation, by default on the validation set unless --test is passed.
-    if args.eval:
-        test_stats = {}
-        test_model = model_ema if model_ema is not None else model
-        for i, item in enumerate(val_tuples):
-            evaluator_list = build_evaluator_list(item.base_ds, item.dataset_name)
-            postprocessors = build_postprocessors(args, item.dataset_name)
-            item = item._replace(evaluator_list=evaluator_list)
-            print(f"Evaluating {item.dataset_name}")
-            curr_test_stats = evaluate(
-                model=test_model,
-                criterion=criterion,
-                contrastive_criterion=contrastive_criterion,
-                qa_criterion=qa_criterion,
-                postprocessors=postprocessors,
-                weight_dict=weight_dict,
-                data_loader=item.dataloader,
-                evaluator_list=item.evaluator_list,
-                device=device,
-                args=args,
-            )
-            test_stats.update({item.dataset_name + "_" + k: v for k, v in curr_test_stats.items()})
+    # if args.eval:
+    #     test_stats = {}
+    #     test_model = model_ema if model_ema is not None else model
+    #     for i, item in enumerate(val_tuples):
+    #         evaluator_list = build_evaluator_list(item.base_ds, item.dataset_name)
+    #         postprocessors = build_postprocessors(args, item.dataset_name)
+    #         item = item._replace(evaluator_list=evaluator_list)
+    #         print(f"Evaluating {item.dataset_name}")
+    #         curr_test_stats = evaluate(
+    #             model=test_model,
+    #             criterion=criterion,
+    #             contrastive_criterion=contrastive_criterion,
+    #             qa_criterion=qa_criterion,
+    #             postprocessors=postprocessors,
+    #             weight_dict=weight_dict,
+    #             data_loader=item.dataloader,
+    #             evaluator_list=item.evaluator_list,
+    #             device=device,
+    #             args=args,
+    #         )
+    #         test_stats.update({item.dataset_name + "_" + k: v for k, v in curr_test_stats.items()})
 
-        log_stats = {
-            **{f"test_{k}": v for k, v in test_stats.items()},
-            "n_parameters": n_parameters,
-        }
-        print(log_stats)
-        return
+    #     log_stats = {
+    #         **{f"test_{k}": v for k, v in test_stats.items()},
+    #         "n_parameters": n_parameters,
+        # }
+        # print(log_stats)
+        # return
 
     # Runs training and evaluates after every --eval_skip epochs
     print("Start training")
     start_time = time.time()
     best_metric = 0.0
     for epoch in range(args.start_epoch, args.epochs):
-        if args.epoch_chunks > 0:
-            sampler_train = samplers_train[epoch % len(samplers_train)]
-            data_loader_train = data_loaders_train[epoch % len(data_loaders_train)]
-            print(f"Starting epoch {epoch // len(data_loaders_train)}, sub_epoch {epoch % len(data_loaders_train)}")
-        else:
-            print(f"Starting epoch {epoch}")
+        # if args.epoch_chunks > 0:
+        #     sampler_train = samplers_train[epoch % len(samplers_train)]
+        #     data_loader_train = data_loaders_train[epoch % len(data_loaders_train)]
+        #     print(f"Starting epoch {epoch // len(data_loaders_train)}, sub_epoch {epoch % len(data_loaders_train)}")
+        # else:
+        print(f"Starting epoch {epoch}")
         if args.distributed:
             sampler_train.set_epoch(epoch)
         train_stats = train_one_epoch(

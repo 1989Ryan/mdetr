@@ -52,6 +52,7 @@ def train_one_epoch(
 
     num_training_steps = int(len(data_loader) * args.epochs)
     for i, batch_dict in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
+        # print(batch_dict)
         curr_step = epoch * len(data_loader) + i
         samples = batch_dict["samples"].to(device)
         positive_map = batch_dict["positive_map"].to(device) if "positive_map" in batch_dict else None

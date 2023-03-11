@@ -1,0 +1,19 @@
+submitit ERROR (2023-03-10 17:30:36,488) - Submitted job triggered an exception
+Traceback (most recent call last):
+  File "/opt/miniconda3/lib/python3.7/runpy.py", line 193, in _run_module_as_main
+    "__main__", mod_spec)
+  File "/opt/miniconda3/lib/python3.7/runpy.py", line 85, in _run_code
+    exec(code, run_globals)
+  File "/home/zirui/myenv/lib/python3.7/site-packages/submitit/core/_submit.py", line 11, in <module>
+    submitit_main()
+  File "/home/zirui/myenv/lib/python3.7/site-packages/submitit/core/submission.py", line 72, in submitit_main
+    process_job(args.folder)
+  File "/home/zirui/myenv/lib/python3.7/site-packages/submitit/core/submission.py", line 65, in process_job
+    raise error
+  File "/home/zirui/myenv/lib/python3.7/site-packages/submitit/core/submission.py", line 54, in process_job
+    result = delayed.result()
+  File "/home/zirui/myenv/lib/python3.7/site-packages/submitit/core/utils.py", line 133, in result
+    self._result = self.function(*self.args, **self.kwargs)
+  File "baseline/mdetr/run_with_submitit.py", line 95, in __call__
+    import main as detection
+ModuleNotFoundError: No module named 'main'

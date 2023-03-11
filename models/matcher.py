@@ -62,20 +62,25 @@ class HungarianMatcher(nn.Module):
 
         # Also concat the target labels and boxes
         tgt_bbox = torch.cat([v["boxes"] for v in targets])
+        # print(tgt_bbox)
+        # print(tgt_bbox.size())
+        # print(positive_map.size())
         assert len(tgt_bbox) == len(positive_map)
-
+        # print(positive_map.unsqueeze(0).size())
+        # print(out_prob.unsqueeze(1).size())
         # Compute the soft-cross entropy between the predicted token alignment and the GT one for each box
-        cost_class = -(out_prob.unsqueeze(1) * positive_map.unsqueeze(0)).sum(-1)
+        # cost_class = -(out_prob.unsqueeze(1) * positive_map.unsqueeze(0)).sum(-1)
 
         # Compute the L1 cost between boxes
-        cost_bbox = torch.cdist(out_bbox, tgt_bbox, p=1)
-        assert cost_class.shape == cost_bbox.shape
+        # print(out_bbox.size())
+        cost_bbox = torch.cdist(out_bbox, tgt_bbox.float(), p=1)
+        # assert cost_class.shape == cost_bbox.shape
 
         # Compute the giou cost betwen boxes
         cost_giou = -generalized_box_iou(box_cxcywh_to_xyxy(out_bbox), box_cxcywh_to_xyxy(tgt_bbox))
 
         # Final cost matrix
-        C = self.cost_bbox * cost_bbox + self.cost_class * cost_class + self.cost_giou * cost_giou
+        C = self.cost_bbox * cost_bbox + self.cost_giou * cost_giou
         C = C.view(bs, num_queries, -1).cpu()
 
         sizes = [len(v["boxes"]) for v in targets]

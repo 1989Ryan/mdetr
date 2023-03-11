@@ -1,0 +1,4 @@
+submitit INFO (2023-03-10 17:30:59,293) - Starting with JobEnvironment(job_id=10664, hostname=sc2grpwk2.d2.comp.nus.edu.sg, local_rank=0(1), node=0(1), global_rank=0(1))
+submitit INFO (2023-03-10 17:30:59,294) - Loading pickle: /home/zirui/research_paragon/baseline/mdetr/work/10664_submitted.pkl
+Setting GLOO and NCCL sockets IFNAME to: enp2s0
+submitit ERROR (2023-03-10 17:30:59,304) - Submitted job triggered an exception
